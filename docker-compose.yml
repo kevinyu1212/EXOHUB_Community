@@ -1,0 +1,24 @@
+﻿services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: exohub-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-exohub}
+      POSTGRES_USER: ${POSTGRES_USER:-exohub_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - exohub_pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: exohub-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - exohub_redisdata:/data
+
+volumes:
+  exohub_pgdata:
+  exohub_redisdata:
