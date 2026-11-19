@@ -14,6 +14,7 @@ public class PricingController {
     public ApiResponse> status() {
         return ApiResponse.ok(Map.of(
                 "module", "pricing",
+                "autoTrainingEnabled", false,
                 "aiValuationEnabled", false,
                 "aiForecastEnabled", false,
                 "status", "READY_FOR_MODEL_INTEGRATION"

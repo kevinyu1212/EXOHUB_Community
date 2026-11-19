@@ -23,7 +23,6 @@ class ValuationResponse(BaseModel):
 
 
 def estimate_individual_price(req: ValuationRequest) -> ValuationResponse:
-    # 초기 휴리스틱/기준가 골격 (학습 모델 파이프라인 연결 전 기준선)
     base = req.recent_median_price
     multiplier = 1.0
 
@@ -34,8 +33,8 @@ def estimate_individual_price(req: ValuationRequest) -> ValuationResponse:
         elif g in {"A", "PREMIUM"}:
             multiplier *= 1.1
 
-    if req.origin_type and req.origin_type.upper() == "CB":
-        multiplier *= 1.0
+    if req.origin_type and req.origin_type.upper() == "WC":
+        multiplier *= 0.9
 
     fair = round(base * multiplier, 2)
     return ValuationResponse(
