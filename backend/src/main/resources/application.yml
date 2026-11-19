@@ -1,0 +1,20 @@
+﻿server:
+  port: 8080
+
+spring:
+  application:
+    name: exohub-backend
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:exohub}
+    username: ${POSTGRES_USER:exohub_user}
+    password: ${POSTGRES_PASSWORD:change_me}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration

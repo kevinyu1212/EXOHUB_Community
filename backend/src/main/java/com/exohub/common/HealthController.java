@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class HealthController {
 
     @GetMapping
-    public ApiResponse> health() {
+    public ApiResponse<Map<String, String>> health() {
         return ApiResponse.ok(Map.of("service", "exohub-backend", "status", "UP"));
     }
 }
