@@ -1,6 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { GlobalNav, GlobalSearchBar } from "../shared";
 import type { CategoryCode } from "../shared";
+import {
+  SharedAdBanner,
+  SharedRightSidebar,
+  SharedSiteFooter,
+  useIsCompactViewport,
+  useThemeMode
+} from "../shared/commonUiKit";
 import { MemberWorkspaceView } from "../features/member/MemberWorkspaceView";
 import { AdminWorkbenchView } from "../features/admin/AdminWorkbenchView";
 import {
@@ -45,6 +52,10 @@ export const CommonPageShell: React.FC = () => {
   });
   const [selectedCategory, setSelectedCategory] = useState<CategoryCode | "ALL">("ALL");
   const [isAdminPreview, setIsAdminPreview] = useState<boolean>(true);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
+
+  const isCompact = useIsCompactViewport(960);
+  const { themeMode, toggleThemeMode } = useThemeMode("dark");
 
   const navigateTo = (nextPath: string, searchParam?: string) => {
     const targetPath = normalizePath(nextPath);
@@ -71,6 +82,14 @@ export const CommonPageShell: React.FC = () => {
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
+
+  const handleToggleAdminPreview = () => {
+    const nextAdmin = !isAdminPreview;
+    setIsAdminPreview(nextAdmin);
+    if (!nextAdmin && activePath === "/admin") {
+      navigateTo("/");
+    }
+  };
 
   const renderPage = () => {
     switch (activePath) {
@@ -115,55 +134,32 @@ export const CommonPageShell: React.FC = () => {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      <GlobalNav activePath={activePath} onSelectPath={navigateTo} isAdmin={isAdminPreview} />
+      <GlobalNav
+        onSelectHome={() => navigateTo("/")}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+        themeMode={themeMode}
+        onToggleTheme={toggleThemeMode}
+      />
 
       <div
         style={{
           flex: 1,
           width: "100%",
-          maxWidth: "1200px",
+          maxWidth: "1440px",
           margin: "0 auto",
-          padding: "24px 20px",
+          padding: "18px 24px 22px",
           display: "flex",
           flexDirection: "column",
-          gap: "18px"
+          gap: "14px"
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: "12px",
-            flexWrap: "wrap"
-          }}
-        >
-          <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-            현재 경로: <strong style={{ color: "var(--text-primary)" }}>{activePath}</strong> · 각 메뉴 우측{" "}
-            <strong style={{ color: "var(--accent-secondary)" }}>↗</strong> 클릭 시 새 창으로 열립니다.
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              const nextAdmin = !isAdminPreview;
-              setIsAdminPreview(nextAdmin);
-              if (!nextAdmin && activePath === "/admin") {
-                navigateTo("/");
-              }
-            }}
-            style={{
-              padding: "5px 10px",
-              borderRadius: "var(--radius-sm)",
-              border: "1px solid var(--border-subtle)",
-              backgroundColor: "var(--bg-surface)",
-              color: "var(--text-muted)",
-              fontSize: "12px",
-              cursor: "pointer"
-            }}
-          >
-            관리자 메뉴 미리보기: {isAdminPreview ? "ON" : "OFF"}
-          </button>
-        </div>
+        <SharedAdBanner
+          headline="특수생물 분양·사육장비·표본/박제 기획전 및 시세 알림"
+          subtext="배송비 포함 총액 비교와 출처·검수 상태 확인을 한곳에서 살펴보세요."
+          ctaLabel="가격 비교 보기"
+          onCtaClick={() => navigateTo("/price")}
+        />
 
         <GlobalSearchBar
           query={query}
@@ -173,23 +169,47 @@ export const CommonPageShell: React.FC = () => {
           onSubmitSearch={() => navigateTo("/search", query)}
         />
 
-        <main style={{ flex: 1 }}>{renderPage()}</main>
+        <div
+          style={{
+            flex: 1,
+            display: "grid",
+            gridTemplateColumns:
+              !isCompact && sidebarOpen ? "minmax(0, 1fr) 260px" : "minmax(0, 1fr)",
+            gap: !isCompact && sidebarOpen ? "18px" : "0px",
+            alignItems: "start",
+            transition: "gap 0.24s ease"
+          }}
+        >
+          <main style={{ minWidth: 0 }}>{renderPage()}</main>
+
+          <SharedRightSidebar
+            activePath={activePath}
+            isAdminPreview={isAdminPreview}
+            isCompact={isCompact}
+            isOpen={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
+            onNavigate={navigateTo}
+            onToggleAdminPreview={handleToggleAdminPreview}
+          />
+        </div>
       </div>
 
-      <footer
-        style={{
-          padding: "16px 20px",
-          backgroundColor: "var(--bg-surface)",
-          borderTop: "1px solid var(--border-subtle)",
-          fontSize: "12px",
-          color: "var(--text-muted)",
-          lineHeight: 1.6
-        }}
-      >
-        <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
-          EXOHUB · 정보는 출처 및 검수 상태와 함께 제공되며, 법적 거래 허용·종 확정 동정·질병 진단은 별도 확인 및 전문가 검수가 필요합니다.
-        </div>
-      </footer>
+      {isCompact && sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            top: "63px",
+            zIndex: 20,
+            backgroundColor: "rgba(0, 0, 0, 0.45)",
+            transition: "opacity 0.22s ease"
+          }}
+        />
+      )}
+
+      <SharedSiteFooter onNavigate={navigateTo} />
     </div>
   );
 };
