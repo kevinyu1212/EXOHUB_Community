@@ -12,8 +12,17 @@ from app.analytics.algorithms import (
     run_chat_assist,
     run_normalize,
 )
+from app.analytics.web_collector import WebSearchRequest, WebSearchResponse, run_web_search
+from app.training.trainer import (
+    SearchAndTrainRequest,
+    SearchAndTrainResponse,
+    TrainValuationRequest,
+    TrainValuationResponse,
+    train_bot_from_web_search,
+    train_valuation_model,
+)
 
-app = FastAPI(title="EXOHUB AI Service", version="0.2.0")
+app = FastAPI(title="EXOHUB AI Service", version="0.5.0")
 
 
 @app.get("/health")
@@ -44,3 +53,18 @@ def api_anomaly_check(req: AnomalyCheckRequest) -> AnomalyCheckResponse:
 @app.post("/api/v1/ai/chat-assist", response_model=ChatAssistResponse)
 def api_chat_assist(req: ChatAssistRequest) -> ChatAssistResponse:
     return run_chat_assist(req)
+
+
+@app.post("/api/v1/ai/web-search", response_model=WebSearchResponse)
+def api_web_search(req: WebSearchRequest) -> WebSearchResponse:
+    return run_web_search(req)
+
+
+@app.post("/api/v1/ai/train", response_model=TrainValuationResponse)
+def api_train(req: TrainValuationRequest) -> TrainValuationResponse:
+    return train_valuation_model(req)
+
+
+@app.post("/api/v1/ai/search-and-train", response_model=SearchAndTrainResponse)
+def api_search_and_train(req: SearchAndTrainRequest) -> SearchAndTrainResponse:
+    return train_bot_from_web_search(req)

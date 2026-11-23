@@ -8,6 +8,7 @@ import {
   useIsCompactViewport,
   useThemeMode
 } from "../shared/commonUiKit";
+import { SharedAiChatbotWidget } from "../shared/ui/SharedAiChatbotWidget";
 import { MemberWorkspaceView } from "../features/member/MemberWorkspaceView";
 import { AdminWorkbenchView } from "../features/admin/AdminWorkbenchView";
 import {
@@ -59,9 +60,13 @@ export const CommonPageShell: React.FC = () => {
 
   const navigateTo = (nextPath: string, searchParam?: string) => {
     const targetPath = normalizePath(nextPath);
+    if (typeof searchParam === "string") {
+      setQuery(searchParam);
+    }
+    const effectiveQ = typeof searchParam === "string" ? searchParam : query;
     const searchSuffix =
-      searchParam && searchParam.trim().length > 0
-        ? `?q=${encodeURIComponent(searchParam.trim())}`
+      targetPath === "/search" && effectiveQ.trim().length > 0
+        ? `?q=${encodeURIComponent(effectiveQ.trim())}`
         : "";
     const fullUrl = `${targetPath}${searchSuffix}`;
 
@@ -210,6 +215,7 @@ export const CommonPageShell: React.FC = () => {
       )}
 
       <SharedSiteFooter onNavigate={navigateTo} />
+      <SharedAiChatbotWidget activePath={activePath} onNavigate={navigateTo} />
     </div>
   );
 };
