@@ -1,3 +1,8 @@
+export interface ChatHistoryTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export interface MatchedCorpusSourceItem {
   title: string;
   url: string;
@@ -5,14 +10,19 @@ export interface MatchedCorpusSourceItem {
   score: number;
   snippet: string;
   verification_status?: string;
+  collected_at?: string | null;
 }
 
 export interface ChatAssistApiResponse {
   reply: string;
   suggested_routes: string[];
+  follow_ups?: string[];
   confidence: number;
   matched_sources?: MatchedCorpusSourceItem[];
+  expanded_queries?: string[];
   live_briefing_summary?: string | null;
+  collected_at?: string | null;
+  verification_status?: string;
   caution_note: string;
 }
 
@@ -37,7 +47,7 @@ const DEFAULT_AI_BASE_URL =
   (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_AI_SERVICE_URL ??
   "http://127.0.0.1:8000";
 
-async function postJson<T>(path: string, payload: unknown, timeoutMs = 6500): Promise<T | null> {
+async function postJson<T>(path: string, payload: unknown, timeoutMs = 8000): Promise<T | null> {
   try {
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -57,12 +67,16 @@ async function postJson<T>(path: string, payload: unknown, timeoutMs = 6500): Pr
 
 export async function requestAiChatAssist(
   message: string,
-  contextPath: string
+  contextPath: string,
+  deepWebSearch = false,
+  history: ChatHistoryTurn[] = []
 ): Promise<ChatAssistApiResponse | null> {
   return postJson<ChatAssistApiResponse>("/api/v1/ai/chat-assist", {
     message,
+    history: history.slice(-8),
     context_path: contextPath,
-    enable_live_web_fallback: true
+    enable_live_web_fallback: true,
+    deep_web_search: deepWebSearch
   });
 }
 

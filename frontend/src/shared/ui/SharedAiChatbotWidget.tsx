@@ -1,13 +1,16 @@
 import React, { useState } from "react";
 import { generateLocalChatReply } from "../ai/aiAlgorithms";
 import { requestAiChatAssist } from "../ai/aiServiceClient";
-import type { MatchedCorpusSourceItem } from "../ai/aiServiceClient";
+import type { ChatHistoryTurn, MatchedCorpusSourceItem } from "../ai/aiServiceClient";
 
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
   confidence?: number;
+  collectedAt?: string | null;
+  verificationStatus?: string;
+  followUps?: string[];
   sources?: MatchedCorpusSourceItem[];
   routes?: Array<{ path: string; label: string }>;
 }
@@ -24,16 +27,16 @@ const ROUTE_LABELS: Record<string, string> = {
   "/ai-lab": "AI LAB"
 };
 
-const QUICK_PROMPTS = [
+const STARTER_PROMPTS = [
   "크레스티드 게코 사육 온도 습도",
-  "최신 분양 시세 브리핑",
+  "최신 분양 시세 웹 검색 브리핑",
   "표본 보관 및 법적 확인 사항"
 ];
 
 const INITIAL_WELCOME: ChatMessage = {
   id: "welcome",
   role: "assistant",
-  text: "EXOHUB AI 챗봇입니다. 학습 코퍼스와 실시간 검색 브리핑을 바탕으로 도감·시세·사육·표본 탐색과 페이지 이동을 도와드려요. (종 동정·질병·법적 거래 허용 여부는 전문가 검수 및 별도 확인 필요)"
+  text: "EXOHUB 대화형 AI 모듈입니다. 이전 대화 문맥과 학습 코퍼스, 실시간 웹 검색 브리핑을 이어서 대답합니다. (종 동정·질병·법적 거래 허용 여부는 전문가 검수 및 별도 확인 필요)"
 };
 
 export const SharedAiChatbotWidget: React.FC<{
@@ -41,6 +44,7 @@ export const SharedAiChatbotWidget: React.FC<{
   onNavigate: (path: string) => void;
 }> = ({ activePath, onNavigate }) => {
   const [open, setOpen] = useState<boolean>(false);
+  const [deepWebSearch, setDeepWebSearch] = useState<boolean>(true);
   const [input, setInput] = useState<string>("");
   const [sending, setSending] = useState<boolean>(false);
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_WELCOME]);
@@ -48,6 +52,14 @@ export const SharedAiChatbotWidget: React.FC<{
   const submitPrompt = async (rawPrompt: string) => {
     const trimmed = rawPrompt.trim();
     if (!trimmed || sending) return;
+
+    const historyPayload: ChatHistoryTurn[] = messages
+      .filter((m) => m.id !== "welcome")
+      .slice(-8)
+      .map((m) => ({
+        role: m.role,
+        content: m.text
+      }));
 
     const userMsg: ChatMessage = {
       id: `u-${Date.now()}`,
@@ -58,8 +70,12 @@ export const SharedAiChatbotWidget: React.FC<{
     setInput("");
     setSending(true);
 
-    const fallback = generateLocalChatReply(trimmed, activePath);
-    const remote = await requestAiChatAssist(trimmed, activePath);
+    const contextualPrompt =
+      historyPayload.length > 0 && trimmed.length <= 24
+        ? `${historyPayload[historyPayload.length - 1]?.content.slice(0, 40) ?? ""} ${trimmed}`
+        : trimmed;
+    const fallback = generateLocalChatReply(contextualPrompt, activePath);
+    const remote = await requestAiChatAssist(trimmed, activePath, deepWebSearch, historyPayload);
 
     const botText = remote
       ? `${remote.reply}\n\n[${remote.caution_note}]`
@@ -79,6 +95,9 @@ export const SharedAiChatbotWidget: React.FC<{
         role: "assistant",
         text: botText,
         confidence: remote?.confidence,
+        collectedAt: remote?.collected_at,
+        verificationStatus: remote?.verification_status,
+        followUps: remote?.follow_ups ?? [],
         sources: remote?.matched_sources ?? [],
         routes: botRoutes
       }
@@ -96,14 +115,20 @@ export const SharedAiChatbotWidget: React.FC<{
     setMessages([INITIAL_WELCOME]);
   };
 
+  const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+  const activeChips =
+    lastAssistant && lastAssistant.followUps && lastAssistant.followUps.length > 0
+      ? lastAssistant.followUps
+      : STARTER_PROMPTS;
+
   return (
     <div style={{ position: "fixed", right: "20px", bottom: "20px", zIndex: 40 }}>
       {open && (
         <section
-          aria-label="EXOHUB AI 챗봇"
+          aria-label="EXOHUB 대화형 AI 챗봇"
           style={{
-            width: "min(380px, calc(100vw - 32px))",
-            maxHeight: "540px",
+            width: "min(395px, calc(100vw - 32px))",
+            maxHeight: "565px",
             marginBottom: "10px",
             backgroundColor: "var(--bg-surface)",
             border: "1px solid var(--border-subtle)",
@@ -126,13 +151,34 @@ export const SharedAiChatbotWidget: React.FC<{
           >
             <div>
               <div style={{ fontSize: "13px", fontWeight: 800, color: "var(--accent-primary)" }}>
-                EXOHUB AI 챗봇
+                EXOHUB 대화형 AI
               </div>
               <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                코퍼스 매칭 · 검색 브리핑 · 화면 안내
+                멀티턴 대화 · 코퍼스 · 웹 검색 브리핑
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <button
+                type="button"
+                onClick={() => setDeepWebSearch((prev) => !prev)}
+                title="확장 웹 검색 사용 여부"
+                style={{
+                  padding: "4px 8px",
+                  borderRadius: "var(--radius-sm)",
+                  border: deepWebSearch
+                    ? "1px solid var(--accent-secondary)"
+                    : "1px solid var(--border-subtle)",
+                  backgroundColor: deepWebSearch
+                    ? "rgba(56, 189, 248, 0.14)"
+                    : "var(--bg-canvas)",
+                  color: deepWebSearch ? "var(--accent-secondary)" : "var(--text-muted)",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  cursor: "pointer"
+                }}
+              >
+                {deepWebSearch ? "웹 검색 심화 ON" : "웹 검색 심화 OFF"}
+              </button>
               <button
                 type="button"
                 onClick={handleReset}
@@ -178,12 +224,12 @@ export const SharedAiChatbotWidget: React.FC<{
               backgroundColor: "var(--bg-canvas)"
             }}
           >
-            {QUICK_PROMPTS.map((qp) => (
+            {activeChips.map((chip) => (
               <button
-                key={qp}
+                key={chip}
                 type="button"
                 disabled={sending}
-                onClick={() => submitPrompt(qp)}
+                onClick={() => submitPrompt(chip)}
                 style={{
                   padding: "4px 8px",
                   borderRadius: "999px",
@@ -194,7 +240,7 @@ export const SharedAiChatbotWidget: React.FC<{
                   cursor: "pointer"
                 }}
               >
-                {qp}
+                {chip}
               </button>
             ))}
           </div>
@@ -228,9 +274,11 @@ export const SharedAiChatbotWidget: React.FC<{
               >
                 <div>{m.text}</div>
 
-                {m.role === "assistant" && typeof m.confidence === "number" && (
+                {m.role === "assistant" && (typeof m.confidence === "number" || m.collectedAt) && (
                   <div style={{ marginTop: "6px", fontSize: "10px", color: "var(--text-muted)" }}>
-                    참고 신뢰도: {Math.round(m.confidence * 100)}%
+                    {typeof m.confidence === "number" ? `참고 신뢰도 ${Math.round(m.confidence * 100)}%` : ""}
+                    {m.verificationStatus ? ` · 상태 ${m.verificationStatus}` : ""}
+                    {m.collectedAt ? ` · 확인 ${m.collectedAt}` : ""}
                   </div>
                 )}
 
@@ -298,7 +346,7 @@ export const SharedAiChatbotWidget: React.FC<{
             ))}
             {sending && (
               <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                코퍼스 및 검색 브리핑을 조회하는 중...
+                대화 맥락과 코퍼스·웹 검색 결과를 연결해 응답을 구성하는 중...
               </div>
             )}
           </div>
@@ -316,7 +364,7 @@ export const SharedAiChatbotWidget: React.FC<{
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="질문이나 찾을 주제를 입력..."
+              placeholder="이어서 질문하거나 주제를 입력..."
               style={{
                 flex: 1,
                 padding: "7px 10px",
@@ -350,7 +398,7 @@ export const SharedAiChatbotWidget: React.FC<{
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        aria-label="EXOHUB AI 챗봇 토글"
+        aria-label="EXOHUB 대화형 AI 챗봇 토글"
         style={{
           padding: "10px 15px",
           borderRadius: "999px",
