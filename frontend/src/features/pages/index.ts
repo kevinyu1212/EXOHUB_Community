@@ -1,0 +1,9 @@
+export { HomePage } from "./HomePage";
+export { TaxaPage } from "./TaxaPage";
+export { PricePage } from "./PricePage";
+export { MarketPage } from "./MarketPage";
+export { CarePage } from "./CarePage";
+export { CollectionPage } from "./CollectionPage";
+export { CommunityPage } from "./CommunityPage";
+export { AiLabPage } from "./AiLabPage";
+export { SearchPage } from "./SearchPage";
