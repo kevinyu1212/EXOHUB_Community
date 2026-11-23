@@ -220,12 +220,12 @@ def _search_duckduckgo_html(query: str, max_results: int, client: httpx.Client) 
   return items
 
 
-def _build_briefing(query: str, items: list[WebSearchResultItem]) -> tuple[str, list[str]]:
-  valid_items = [it for it in items if it.source != "collector-fallback"]
+def _build_briefing(query: str, valid_items: list[WebSearchResultItem], diagnostics: list[str]) -> tuple[str, list[str]]:
   if not valid_items:
+    diag_text = f" ({' | '.join(diagnostics)})" if diagnostics else ""
     return (
-        f"'{query}'에 대한 실시간 외부 검색 결과를 확보하지 못했습니다. 네트워크/프록시 상태 또는 네이버 API 키 설정을 확인해 주세요.",
-        ["외부 검색 결과 없음 · 출처 원문 확인 필요"],
+        f"'{query}'에 대한 실시간 외부 검색 결과가 0건입니다{diag_text}. 네이버 API 키 설정 또는 네트워크·프록시 상태를 확인해 주세요.",
+        ["외부 검색 결과 0건 · 출처 원문 확인 필요"],
     )
 
   sources = sorted({it.source for it in valid_items})
@@ -279,17 +279,7 @@ def run_web_search(req: WebSearchRequest) -> WebSearchResponse:
       except Exception as exc:
         diagnostics.append(f"{label}: 오류({type(exc).__name__}: {exc})")
 
-  if not merged:
-    merged.append(
-        WebSearchResultItem(
-            title="외부 검색 수집 결과 없음 (네트워크/차단 또는 API 키 확인 필요)",
-            url=f"https://ko.wikipedia.org/w/index.php?search={quote_plus(query)}",
-            snippet=" | ".join(diagnostics) if diagnostics else "검색 응답이 비어 있습니다.",
-            source="collector-fallback",
-        )
-    )
-
-  briefing_summary, highlights = _build_briefing(query, merged)
+  briefing_summary, highlights = _build_briefing(query, merged, diagnostics)
 
   return WebSearchResponse(
       query=query,

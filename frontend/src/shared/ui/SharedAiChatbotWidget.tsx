@@ -10,6 +10,8 @@ interface ChatMessage {
   confidence?: number;
   collectedAt?: string | null;
   verificationStatus?: string;
+  ollamaUsed?: boolean;
+  ollamaModel?: string | null;
   followUps?: string[];
   sources?: MatchedCorpusSourceItem[];
   routes?: Array<{ path: string; label: string }>;
@@ -36,7 +38,7 @@ const STARTER_PROMPTS = [
 const INITIAL_WELCOME: ChatMessage = {
   id: "welcome",
   role: "assistant",
-  text: "EXOHUB 대화형 AI 모듈입니다. 이전 대화 문맥과 학습 코퍼스, 실시간 웹 검색 브리핑을 이어서 대답합니다. (종 동정·질병·법적 거래 허용 여부는 전문가 검수 및 별도 확인 필요)"
+  text: "EXOHUB 대화형 AI 모듈입니다. 이전 대화 문맥과 코퍼스, 웹 검색 브리핑, (연결 시) Ollama 로컬 모델을 함께 활용합니다. (종 동정·질병·법적 거래 허용 여부는 전문가 검수 및 별도 확인 필요)"
 };
 
 export const SharedAiChatbotWidget: React.FC<{
@@ -97,6 +99,8 @@ export const SharedAiChatbotWidget: React.FC<{
         confidence: remote?.confidence,
         collectedAt: remote?.collected_at,
         verificationStatus: remote?.verification_status,
+        ollamaUsed: remote?.ollama_used,
+        ollamaModel: remote?.ollama_model,
         followUps: remote?.follow_ups ?? [],
         sources: remote?.matched_sources ?? [],
         routes: botRoutes
@@ -154,7 +158,7 @@ export const SharedAiChatbotWidget: React.FC<{
                 EXOHUB 대화형 AI
               </div>
               <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                멀티턴 대화 · 코퍼스 · 웹 검색 브리핑
+                멀티턴 · 코퍼스 · 웹 검색 · Ollama
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -274,13 +278,17 @@ export const SharedAiChatbotWidget: React.FC<{
               >
                 <div>{m.text}</div>
 
-                {m.role === "assistant" && (typeof m.confidence === "number" || m.collectedAt) && (
-                  <div style={{ marginTop: "6px", fontSize: "10px", color: "var(--text-muted)" }}>
-                    {typeof m.confidence === "number" ? `참고 신뢰도 ${Math.round(m.confidence * 100)}%` : ""}
-                    {m.verificationStatus ? ` · 상태 ${m.verificationStatus}` : ""}
-                    {m.collectedAt ? ` · 확인 ${m.collectedAt}` : ""}
-                  </div>
-                )}
+                {m.role === "assistant" &&
+                  (typeof m.confidence === "number" || m.collectedAt || m.ollamaUsed) && (
+                    <div style={{ marginTop: "6px", fontSize: "10px", color: "var(--text-muted)" }}>
+                      {typeof m.confidence === "number"
+                        ? `참고 신뢰도 ${Math.round(m.confidence * 100)}%`
+                        : ""}
+                      {m.ollamaUsed ? ` · Ollama(${m.ollamaModel ?? "local"})` : ""}
+                      {m.verificationStatus ? ` · 상태 ${m.verificationStatus}` : ""}
+                      {m.collectedAt ? ` · 확인 ${m.collectedAt}` : ""}
+                    </div>
+                  )}
 
                 {m.sources && m.sources.length > 0 && (
                   <div
@@ -346,7 +354,7 @@ export const SharedAiChatbotWidget: React.FC<{
             ))}
             {sending && (
               <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                대화 맥락과 코퍼스·웹 검색 결과를 연결해 응답을 구성하는 중...
+                대화 맥락과 코퍼스·웹 검색·Ollama 응답을 확인하는 중...
               </div>
             )}
           </div>

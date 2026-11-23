@@ -23,6 +23,8 @@ export interface ChatAssistApiResponse {
   live_briefing_summary?: string | null;
   collected_at?: string | null;
   verification_status?: string;
+  ollama_used?: boolean;
+  ollama_model?: string | null;
   caution_note: string;
 }
 
@@ -47,7 +49,7 @@ const DEFAULT_AI_BASE_URL =
   (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_AI_SERVICE_URL ??
   "http://127.0.0.1:8000";
 
-async function postJson<T>(path: string, payload: unknown, timeoutMs = 8000): Promise<T | null> {
+async function postJson<T>(path: string, payload: unknown, timeoutMs = 10000): Promise<T | null> {
   try {
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -76,7 +78,8 @@ export async function requestAiChatAssist(
     history: history.slice(-8),
     context_path: contextPath,
     enable_live_web_fallback: true,
-    deep_web_search: deepWebSearch
+    deep_web_search: deepWebSearch,
+    use_ollama: true
   });
 }
 

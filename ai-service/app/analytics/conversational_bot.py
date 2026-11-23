@@ -3,6 +3,7 @@ from typing import Any, Literal
 import joblib
 from pydantic import BaseModel, Field
 from sklearn.metrics.pairwise import cosine_similarity
+from app.analytics.ollama_client import generate_ollama_reply
 from app.analytics.web_search_bot import enrich_chat_with_web_search
 
 CORPUS_PATH = Path(__file__).resolve().parents[2] / "models" / "bot_search_corpus_v1.joblib"
@@ -29,6 +30,7 @@ class ConversationalChatRequest(BaseModel):
   context_path: str = Field(default="/")
   enable_live_web_fallback: bool = Field(default=True)
   deep_web_search: bool = Field(default=False)
+  use_ollama: bool = Field(default=True)
 
 
 class ConversationalChatResponse(BaseModel):
@@ -41,6 +43,8 @@ class ConversationalChatResponse(BaseModel):
   live_briefing_summary: str | None = None
   collected_at: str | None = None
   verification_status: str = "UNVERIFIED_EXTERNAL_WEB"
+  ollama_used: bool = False
+  ollama_model: str | None = None
   caution_note: str
 
 
@@ -214,8 +218,38 @@ def generate_conversational_reply(req: ConversationalChatRequest) -> Conversatio
   else:
     confidence = 0.68
 
+  composed_reply = "\n\n".join(parts)
+  ollama_used = False
+  ollama_model: str | None = None
+
+  if req.use_ollama:
+    evidence_lines = [
+        f"- {h.title} ({h.source}): {h.snippet}" for h in corpus_hits[:4]
+    ]
+    history_lines = [
+        f"{t.role}: {t.content[:180]}" for t in req.history[-4:]
+    ]
+    sys_prompt = (
+        "당신은 EXOHUB 특수생물 사육·시세·도감·표본 커뮤니티의 대화형 보조 AI입니다. "
+        "제공된 참고 근거와 대화 이력만 바탕으로 과장 없이 한국어로 답하세요. "
+        "종 확정 동정, 질병 진단, 법적 거래 허용 여부는 AI가 단독 확정하지 않고 전문가 검수 및 별도 법령 확인이 필요하다고 안내하세요."
+    )
+    usr_prompt = (
+        f"현재 경로: {req.context_path}\n"
+        f"최근 대화:\n" + ("\n".join(history_lines) if history_lines else "(없음)") + "\n\n"
+        f"사용자 질문: {raw_q}\n"
+        f"반영된 검색 질의: {effective_q}\n"
+        f"웹 브리핑 요약: {live_summary or '(없음)'}\n"
+        f"참고 근거:\n" + ("\n".join(evidence_lines) if evidence_lines else "(없음)")
+    )
+    llm_text, used_model = generate_ollama_reply(sys_prompt, usr_prompt, timeout_sec=8.0)
+    ollama_model = used_model
+    if llm_text:
+      ollama_used = True
+      composed_reply = f"{llm_text}\n\n[요약 안내]\n{composed_reply}"
+
   return ConversationalChatResponse(
-      reply="\n\n".join(parts),
+      reply=composed_reply,
       suggested_routes=routes,
       follow_ups=follow_ups,
       confidence=confidence,
@@ -224,5 +258,7 @@ def generate_conversational_reply(req: ConversationalChatRequest) -> Conversatio
       live_briefing_summary=live_summary,
       collected_at=collected_at,
       verification_status=verification_status,
+      ollama_used=ollama_used,
+      ollama_model=ollama_model,
       caution_note="종 확정 동정, 질병 진단, 법적 거래 허용 여부는 AI가 단독 확정하지 않으며 전문가 검수 및 관련 법령 확인이 필요합니다.",
   )
