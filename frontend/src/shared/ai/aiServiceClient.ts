@@ -1,7 +1,18 @@
+export interface MatchedCorpusSourceItem {
+  title: string;
+  url: string;
+  source: string;
+  score: number;
+  snippet: string;
+  verification_status?: string;
+}
+
 export interface ChatAssistApiResponse {
   reply: string;
   suggested_routes: string[];
   confidence: number;
+  matched_sources?: MatchedCorpusSourceItem[];
+  live_briefing_summary?: string | null;
   caution_note: string;
 }
 
@@ -26,7 +37,7 @@ const DEFAULT_AI_BASE_URL =
   (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_AI_SERVICE_URL ??
   "http://127.0.0.1:8000";
 
-async function postJson<T>(path: string, payload: unknown, timeoutMs = 6000): Promise<T | null> {
+async function postJson<T>(path: string, payload: unknown, timeoutMs = 6500): Promise<T | null> {
   try {
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -50,7 +61,8 @@ export async function requestAiChatAssist(
 ): Promise<ChatAssistApiResponse | null> {
   return postJson<ChatAssistApiResponse>("/api/v1/ai/chat-assist", {
     message,
-    context_path: contextPath
+    context_path: contextPath,
+    enable_live_web_fallback: true
   });
 }
 

@@ -4,6 +4,7 @@ from typing import Any
 import joblib
 from pydantic import BaseModel, Field
 from sklearn.metrics.pairwise import cosine_similarity
+from app.analytics.web_collector import WebSearchRequest, run_web_search
 
 CORPUS_PATH = Path(__file__).resolve().parents[2] / "models" / "bot_search_corpus_v1.joblib"
 
@@ -36,6 +37,7 @@ class AnomalyCheckResponse(BaseModel):
 class ChatAssistRequest(BaseModel):
   message: str = Field(..., min_length=1)
   context_path: str = Field(default="/")
+  enable_live_web_fallback: bool = Field(default=True)
 
 
 class MatchedCorpusSource(BaseModel):
@@ -52,6 +54,7 @@ class ChatAssistResponse(BaseModel):
   suggested_routes: list[str]
   confidence: float
   matched_sources: list[MatchedCorpusSource] = Field(default_factory=list)
+  live_briefing_summary: str | None = None
   caution_note: str
 
 
@@ -143,21 +146,52 @@ def run_chat_assist(req: ChatAssistRequest) -> ChatAssistResponse:
     routes = ["/taxa", "/search", "/ai-lab"]
 
   corpus_hits = _retrieve_corpus_matches(q, top_k=3)
+  top_score = corpus_hits[0].score if corpus_hits else 0.0
+  live_summary: str | None = None
+
+  wants_live = any(k in q for k in ["최신", "검색", "브리핑", "뉴스", "실시간"])
+  if req.enable_live_web_fallback and (top_score < 0.12 or wants_live):
+    try:
+      web_res = run_web_search(WebSearchRequest(query=q, max_results=3))
+      valid_web = [it for it in web_res.results if it.source != "collector-fallback"]
+      if valid_web:
+        live_summary = web_res.briefing_summary
+        existing_urls = {m.url for m in corpus_hits if m.url}
+        for w in valid_web:
+          if w.url in existing_urls:
+            continue
+          existing_urls.add(w.url)
+          corpus_hits.append(
+              MatchedCorpusSource(
+                  title=w.title,
+                  url=w.url,
+                  source=w.source,
+                  score=0.25,
+                  snippet=w.snippet[:180],
+                  verification_status=web_res.verification_status,
+              )
+          )
+    except Exception:
+      pass
+
+  sections: list[str] = [base_reply]
+  if live_summary:
+    sections.append(f"[실시간 검색 브리핑]\n{live_summary}")
   if corpus_hits:
     hit_lines = [
-        f"- [{h.source} · 유사도 {h.score}] {h.title}: {h.snippet}"
-        for h in corpus_hits
+        f"- [{h.source} · 관련도 {h.score}] {h.title}: {h.snippet}"
+        for h in corpus_hits[:4]
     ]
-    reply = f"{base_reply}\n\n[학습 코퍼스 참고 항목]\n" + "\n".join(hit_lines)
-    confidence = min(0.88, round(0.55 + corpus_hits[0].score * 0.3, 2))
+    sections.append("[참고 출처 요약]\n" + "\n".join(hit_lines))
+    confidence = min(0.9, round(0.55 + max(top_score, 0.15 if live_summary else 0.0) * 0.35, 2))
   else:
-    reply = base_reply
     confidence = 0.65
 
   return ChatAssistResponse(
-      reply=reply,
+      reply="\n\n".join(sections),
       suggested_routes=routes,
       confidence=confidence,
-      matched_sources=corpus_hits,
+      matched_sources=corpus_hits[:4],
+      live_briefing_summary=live_summary,
       caution_note="종 확정 동정, 질병 진단, 법적 거래 허용 여부는 AI가 단독 확정하지 않으며 전문가 검수 및 관련 법령 확인이 필요합니다.",
   )
